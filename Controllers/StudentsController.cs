@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using API.Data;
+using Microsoft.AspNetCore.Authorization;
 [ApiController]
 [Route("api/[controller]")]
 public class StudentsController : ControllerBase
@@ -17,13 +18,16 @@ public class StudentsController : ControllerBase
     }
 
     // GET: api/students
+    [Authorize]
     [HttpGet]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(IEnumerable<Student>))]
     public async Task<ActionResult<IEnumerable<Student>>> GetStudents()
     {
         return await _context.Students.ToListAsync();
     }
 
     // GET: api/students/5
+    [Authorize]
     [HttpGet("{id}")]
     public async Task<ActionResult<Student>> GetStudent(int id)
     {
@@ -38,6 +42,7 @@ public class StudentsController : ControllerBase
     }
 
     // POST: api/students
+    [Authorize]
     [HttpPost]
     public async Task<ActionResult<Student>> PostStudent(Student student)
     {
@@ -48,6 +53,7 @@ public class StudentsController : ControllerBase
     }
 
     // PUT: api/students/5
+    [Authorize]
     [HttpPut("{id}")]
     public async Task<IActionResult> PutStudent(int id, Student student)
     {
@@ -78,6 +84,7 @@ public class StudentsController : ControllerBase
     }
 
     // DELETE: api/students/5
+    [Authorize]
     [HttpDelete("{id}")]
     public async Task<IActionResult> DeleteStudent(int id)
     {

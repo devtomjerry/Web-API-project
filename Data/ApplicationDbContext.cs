@@ -20,5 +20,6 @@ namespace API.Data
                 .Property(u => u.Id)
                 .ValueGeneratedOnAdd();
         }
+
     }
 }

@@ -9,20 +9,20 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
 using Microsoft.Extensions.Configuration;
+using BCrypt.Net;
+using System.Net;
+using Microsoft.AspNetCore.Authorization;
 
 [ApiController]
 [Route("api/[controller]")]
 public class UserController : ControllerBase
 {
     private readonly ApplicationDbContext _context;
-    private readonly string _jwtSecret;
-    private readonly int _jwtExpirationInMinutes;
-
+    private readonly IConfiguration _configuration;
     public UserController(ApplicationDbContext context, IConfiguration configuration)
     {
         _context = context;
-        _jwtSecret = configuration["Jwt:Secret"];
-        _jwtExpirationInMinutes = int.Parse(configuration["Jwt:ExpirationInMinutes"]);
+        _configuration = configuration;
     }
 
     [HttpPost("register")]
@@ -35,8 +35,8 @@ public class UserController : ControllerBase
                 {
                     return BadRequest(new { message = "Email is already registered" });
                 }
-
-                var user = new UserModel { Email = model.Email, Password = model.Password };
+               var hashedPassword = BCrypt.Net.BCrypt.HashPassword(model.Password);
+               var user = new UserModel { Email = model.Email, Address = model.Address, MobileNumber = model.MobileNumber, PasswordHash = hashedPassword };
                 _context.Users.Add(user);
                 await _context.SaveChangesAsync();
 
@@ -55,7 +55,7 @@ public class UserController : ControllerBase
             return NotFound(new { message = "User not found" });
         }
 
-        if (user.Password != model.Password)
+        if (!BCrypt.Net.BCrypt.Verify(model.Password, user.PasswordHash))
         {
             return BadRequest(new { message = "Incorrect password" });
         }
@@ -67,20 +67,25 @@ public class UserController : ControllerBase
     private string GenerateJwtToken(UserModel user)
     {
         var tokenHandler = new JwtSecurityTokenHandler();
-        var key = Encoding.ASCII.GetBytes(_jwtSecret);
+        var key = Encoding.UTF8.GetBytes(_configuration["Jwt:SecretKey"]);
+        var issuer = _configuration["Jwt:Issuer"];
+        var audience = _configuration["Jwt:Audience"];
+        var expirationMinutes = Convert.ToDouble(_configuration["Jwt:ExpirationMinutes"]);
         var tokenDescriptor = new SecurityTokenDescriptor
         {
-            Subject = new System.Security.Claims.ClaimsIdentity(new[]
+            Subject = new ClaimsIdentity(new Claim[]
             {
-            new System.Security.Claims.Claim(ClaimTypes.Email, user.Id.ToString()),
-            new System.Security.Claims.Claim(ClaimTypes.Email, user.Email)
-        }),
-            Expires = DateTime.UtcNow.AddMinutes(_jwtExpirationInMinutes),
+                new Claim(ClaimTypes.Name, user.Email),
+            }),
+            Expires = DateTime.UtcNow.AddMinutes(expirationMinutes),
+            Issuer = issuer,
+            Audience = audience,
             SigningCredentials = new SigningCredentials(new SymmetricSecurityKey(key), SecurityAlgorithms.HmacSha256Signature)
         };
         var token = tokenHandler.CreateToken(tokenDescriptor);
         return tokenHandler.WriteToken(token);
     }
+
 
     [HttpPost("logout")]
         public IActionResult Logout()
@@ -88,10 +93,20 @@ public class UserController : ControllerBase
             return Ok(new { message = "User logged out successfully" });
         }
 
-        [HttpGet("users")]
-        public async Task<IActionResult> GetUsers()
+
+    [Authorize]
+    [HttpGet("UsersList")]
+    public async Task<IActionResult> GetUsers()
         {
-            var users = await _context.Users.ToListAsync();
-            return Ok(users);
+        var users = await _context.Users
+                   .Select(user => new UserListDto
+                   {
+                       Id = user.Id,
+                       Email = user.Email,
+                       Address = user.Address,
+                       MobileNumber = user.MobileNumber
+                   })
+                   .ToListAsync();
+        return Ok(users);
         }
 }
